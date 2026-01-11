@@ -8,9 +8,10 @@ import { LeftSidebar } from "@/components/editor/LeftSidebar";
 import { RightSidebar } from "@/components/editor/RightSidebar";
 import { DocumentPreview } from "@/components/editor/DocumentPreview";
 import { TemplateLibrary } from "@/components/editor/TemplateLibrary";
+import { AboutDialog } from "@/components/editor/AboutDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { FileDown, Library, Save, FileImage, Image } from "lucide-react";
+import { FileDown, Library, Save, FileImage, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ export function SponsoringEditor() {
   } = useTemplates();
 
   const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null);
   const [bodyContent, setBodyContent] = useState("");
   const [signers, setSigners] = useState<SignerData[]>([createDefaultSigner()]);
@@ -322,8 +324,16 @@ ${pagesHtml}
       {/* Header with buttons and template name */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card shrink-0">
         {/* Logo placeholder */}
-        <div className="flex items-center justify-center shrink-0">
-          <img src="\icon_full.svg" className="w-24"/>
+        <div className="flex items-center justify-center shrink-0 gap-3">
+          <img src="\icon_full.svg" draggable="false" className="w-24"/>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setAboutOpen(true)}
+            title="About docu."
+          >
+            <Info className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Center buttons */}
@@ -438,6 +448,8 @@ ${pagesHtml}
         onCreate={handleCreateTemplate}
         onImport={handleImportTemplate}
       />
+      {/* About Dialog */}
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
 
       {/* Save Dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
