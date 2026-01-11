@@ -56,7 +56,7 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
                 </div>
                 
                 <h2 className="text-2xl font-bold text-foreground mb-2">docu.</h2>
-                <p className="text-muted-foreground text-sm mb-6">Version 1.0.0 : VIC Package</p>
+                <p className="text-muted-foreground text-sm mb-6">Version 1.0.0</p>
                 
                 <div className="space-y-4 text-left w-full max-w-sm">
                   <div className="bg-muted/50 rounded-lg p-4 border border-border">
