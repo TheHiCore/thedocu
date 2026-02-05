@@ -1,17 +1,17 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { marked } from "marked";
 import { Template, SignerData, createDefaultTemplate } from "@/types/template";
 import { useTemplates } from "@/hooks/useTemplates";
-import { compressImageTo300PPI } from "@/lib/imageCompression";
 import { LeftSidebar } from "@/components/editor/LeftSidebar";
 import { RightSidebar } from "@/components/editor/RightSidebar";
 import { DocumentPreview } from "@/components/editor/DocumentPreview";
 import { TemplateLibrary } from "@/components/editor/TemplateLibrary";
 import { AboutDialog } from "@/components/editor/AboutDialog";
+import { DocumentBackgroundDialog } from "@/components/editor/DocumentBackgroundDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { FileDown, Library, Save, FileImage, Info } from "lucide-react";
+import { FileDown, Library, Save, FileImage, Info, ArrowRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,8 +19,22 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+interface SponsoringEditorProps {
+  onBack: () => void;
+}
 
 const createDefaultSigner = (): SignerData => ({
   name: "",
@@ -29,7 +43,7 @@ const createDefaultSigner = (): SignerData => ({
   position: { x: 130, y: 240, size: 45 },
 });
 
-export function SponsoringEditor() {
+export function SponsoringEditor({ onBack }: SponsoringEditorProps) {
   const {
     templates,
     addTemplate,
@@ -38,16 +52,17 @@ export function SponsoringEditor() {
     duplicateTemplate,
   } = useTemplates();
 
-  const backgroundInputRef = useRef<HTMLInputElement>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null);
   const [bodyContent, setBodyContent] = useState("");
   const [signers, setSigners] = useState<SignerData[]>([createDefaultSigner()]);
   const [libraryOpen, setLibraryOpen] = useState(true);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
+  const [backConfirmOpen, setBackConfirmOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
   const [previewScale, setPreviewScale] = useState(0.5);
-  
+
   // Sidebar widths
   const [leftWidth, setLeftWidth] = useState(420);
   const [rightWidth, setRightWidth] = useState(360);
@@ -63,7 +78,7 @@ export function SponsoringEditor() {
       const availableHeight = window.innerHeight - 120;
       const docWidth = 210 * 3.78;
       const docHeight = 297 * 3.78;
-      
+
       const scaleX = availableWidth / docWidth;
       const scaleY = availableHeight / docHeight;
       setPreviewScale(Math.min(scaleX, scaleY, 0.7));
@@ -79,18 +94,8 @@ export function SponsoringEditor() {
     setCurrentTemplate((prev) => (prev ? { ...prev, ...updates } : null));
   }, [currentTemplate]);
 
-  const handleBackgroundUpload = useCallback(async (file: File) => {
-    try {
-      toast.loading("Compressing image...");
-      const compressedImage = await compressImageTo300PPI(file);
-      handleTemplateChange({ background: compressedImage });
-      toast.dismiss();
-      toast.success("Background uploaded and compressed");
-    } catch (error) {
-      toast.dismiss();
-      toast.error("Failed to compress image");
-      console.error(error);
-    }
+  const handleBackgroundChange = useCallback((background: string) => {
+    handleTemplateChange({ background });
   }, [handleTemplateChange]);
 
   const handleSelectTemplate = useCallback((template: Template) => {
@@ -191,7 +196,7 @@ export function SponsoringEditor() {
     const { coordinates, object, positions } = currentTemplate;
     const fontFamily = currentTemplate.fontFamily || "Arial, sans-serif";
     const fontSize = currentTemplate.fontSize || 12;
-    
+
     // Split content by page breaks
     const PAGE_BREAK_MARKER = "---pagebreak---";
     const sections = bodyContent.split(PAGE_BREAK_MARKER);
@@ -199,7 +204,7 @@ export function SponsoringEditor() {
       const withBreaks = section.trim().replace(/\n\n/g, '\n\n&nbsp;\n\n');
       return marked.parse(withBreaks) as string;
     });
-    
+
     const markdownStyles = `
       .markdown-content { word-wrap: break-word; overflow-wrap: break-word; }
       .markdown-content h1 { font-size: ${fontSize * 2}px; font-weight: bold; margin: 0.5em 0; }
@@ -260,7 +265,7 @@ export function SponsoringEditor() {
         </div>
       `;
     }).join("");
-    
+
     return `
 <!DOCTYPE html>
 <html>
@@ -288,15 +293,15 @@ ${pagesHtml}
 
   const handleExportPDF = useCallback(async () => {
     if (!currentTemplate) return;
-    
+
     const html = buildHtml();
     toast.loading("Preparing PDF...");
-    
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(html);
       printWindow.document.close();
-      
+
       const images = printWindow.document.querySelectorAll('img');
       const imagePromises = Array.from(images).map(img => {
         if (img.complete) return Promise.resolve();
@@ -305,10 +310,10 @@ ${pagesHtml}
           img.onerror = () => resolve();
         });
       });
-      
+
       await Promise.all(imagePromises);
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       toast.dismiss();
       printWindow.focus();
       printWindow.print();
@@ -323,21 +328,29 @@ ${pagesHtml}
     <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ overflow: 'hidden' }}>
       {/* Header with buttons and template name */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card shrink-0">
-        {/* Logo placeholder */}
-        <div className="flex items-center justify-center shrink-0 gap-3">
-          <img src="\icon_full.svg" draggable="false" className="w-24"/>
+        {/* Logo and About button */}
+        <div className="flex items-center gap-3 shrink-0">
+          <button onClick={() => setBackConfirmOpen(true)} className="cursor-pointer">
+            <img src="/icon_full.svg" className="w-24" />
+          </button>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setAboutOpen(true)}
             title="About docu."
           >
-            <Info className="h-4 w-4" />
+            <Info className="h-5 w-5" />
           </Button>
         </div>
 
         {/* Center buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
+          {!currentTemplate && (
+            <div className="absolute right-full mr-3 flex items-center gap-2 animate-pulse whitespace-nowrap">
+              <span className="text-sm text-primary font-medium">Start by creating a template</span>
+              <ArrowRight className="h-4 w-4 text-primary" />
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -346,20 +359,10 @@ ${pagesHtml}
             <Library className="h-4 w-4 mr-2" />
             Library
           </Button>
-          <input
-            ref={backgroundInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleBackgroundUpload(file);
-            }}
-            className="hidden"
-          />
           <Button
             variant="outline"
             size="sm"
-            onClick={() => backgroundInputRef.current?.click()}
+            onClick={() => setBackgroundOpen(true)}
           >
             <FileImage className="h-4 w-4 mr-2" />
             Background
@@ -389,7 +392,7 @@ ${pagesHtml}
             {currentTemplate.name}
           </div>
         ) : (
-          <div className="w-10" /> 
+          <div className="w-10" />
         )}
       </div>
 
@@ -448,8 +451,17 @@ ${pagesHtml}
         onCreate={handleCreateTemplate}
         onImport={handleImportTemplate}
       />
+
       {/* About Dialog */}
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+
+      {/* Background Dialog */}
+      <DocumentBackgroundDialog
+        open={backgroundOpen}
+        onOpenChange={setBackgroundOpen}
+        currentBackground={currentTemplate?.background}
+        onBackgroundChange={handleBackgroundChange}
+      />
 
       {/* Save Dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
@@ -478,6 +490,24 @@ ${pagesHtml}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Back Confirmation */}
+      <AlertDialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Go back to app selection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to go back? Any unsaved changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={onBack}>
+              Go Back
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
