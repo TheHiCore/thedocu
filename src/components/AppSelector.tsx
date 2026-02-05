@@ -32,9 +32,9 @@ export function AppSelector({ onSelectApp }: AppSelectorProps) {
       <div
         className="hidden lg:flex w-1/2 relative overflow-hidden items-center justify-center"
         style={{
-          backgroundColor: `hsla(14,0%,15%,1)`,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 3000 3000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"),radial-gradient(circle at 0% 1%, hsla(332,75%,42%,1) 0%,transparent 67%),radial-gradient(circle at 46% 6%, hsla(349,76%,57%,1) 0%,transparent 81%),radial-gradient(circle at 93% 5%, hsla(332,75%,42%,1) 0%,transparent 66%),radial-gradient(circle at 50% 100%, hsla(253,50%,20%,1) 0%,transparent 80%)`,
-          backgroundBlendMode: `overlay,normal,normal,normal,normal`
+          backgroundColor: "rgb(180 32 92)",
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 3000 3000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"), radial-gradient(circle at 0% 99%, rgb(187, 27, 102) 0%, transparent 67%), radial-gradient(circle at 46% 94%, rgb(229, 62, 93) 0%, transparent 81%), radial-gradient(circle at 93% 95%, rgb(187, 27, 102) 0%, transparent 66%), radial-gradient(circle at 50% 8%, rgb(131, 7, 57) 50%, transparent 100%)`,
+          backgroundBlendMode: "overlay, normal, normal, normal, normal"
         }}
       >
         {/* White Logo */}
