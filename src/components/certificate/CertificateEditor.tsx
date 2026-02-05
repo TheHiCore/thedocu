@@ -1,18 +1,17 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { CertificateTemplate, CertificateEntry, createDefaultCertificateTemplate } from "@/types/certificate";
+import { CertificateTemplate, CertificateEntry, createDefaultCertificateTemplate, TextConfig } from "@/types/certificate";
 import { useCertificateTemplates } from "@/hooks/useCertificateTemplates";
 import { CertificateSidebar } from "./CertificateSidebar";
 import { CertificateRightSidebar } from "./CertificateRightSidebar";
 import { CertificatePreview } from "./CertificatePreview";
 import { CertificateTemplateLibrary } from "./CertificateTemplateLibrary";
 import { DataEntryDialog } from "./DataEntryDialog";
-import { ExportDialog } from "./ExportDialog";
 import { BackgroundDialog } from "./BackgroundDialog";
 import { AboutDialog } from "@/components/editor/AboutDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { FileDown, Library, Save, FileImage, Info, ChevronLeft, ChevronRight, Grid, LayoutTemplate, FileText } from "lucide-react";
+import { FileDown, Library, Save, FileImage, Info, ChevronLeft, ChevronRight, Grid, LayoutTemplate, FileText, ArrowRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +61,6 @@ export function CertificateEditor({ onBack }: CertificateEditorProps) {
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [dataEntryOpen, setDataEntryOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
@@ -241,6 +239,172 @@ export function CertificateEditor({ onBack }: CertificateEditorProps) {
     handleTemplateChange({ background });
   }, [handleTemplateChange]);
 
+  const handleExport = async () => {
+    if (!currentTemplate || !hasData) return;
+
+    toast.loading("Preparing export...");
+
+    try {
+      // Helper to merge entry-specific config with template config
+      const getEffectiveConfig = (templateConfig: TextConfig, entryConfig?: Partial<TextConfig>): TextConfig => {
+        if (entryConfig) {
+          return { ...templateConfig, ...entryConfig };
+        }
+        return templateConfig;
+      };
+
+      // Generate @font-face rules for custom fonts used in the export
+      const generateFontFaceRules = (): string => {
+        return customFonts.map(font => `
+@font-face {
+  font-family: '${font.name}';
+  src: url('${font.url}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}`).join('\n');
+      };
+
+      // Generate single HTML with all pages
+      const isLandscape = currentTemplate.orientation === "landscape";
+      const width = isLandscape ? 297 : 210;
+      const height = isLandscape ? 210 : 297;
+
+      // Helper for generating inline text styles with per-entry config
+      const getInlineTextStyle = (config: TextConfig) => {
+        // Always use the user's X position
+        let left = config.x;
+        // Transform based on alignment to position text correctly around the X point
+        let transform = "none";
+        let textAlign = config.alignment;
+
+        if (config.alignment === "center") {
+          transform = "translateX(-50%)";
+        } else if (config.alignment === "right") {
+          transform = "translateX(-100%)";
+        }
+
+        return `position: absolute; left: ${left}mm; top: ${config.y}mm; text-align: ${textAlign}; transform: ${transform}; font-size: ${config.fontSize}px; color: ${config.color}; font-family: ${config.fontFamily}; white-space: nowrap; margin: 0; line-height: 1;`;
+      };
+
+      const signerStyle = currentTemplate.signers?.map((signer, idx) => {
+        if (!signer.image) return "";
+        return `
+          .signer-${idx} {
+            position: absolute;
+            left: ${signer.position.x}mm;
+            top: ${signer.position.y}mm;
+            transform: translateX(-50%);
+            text-align: center;
+          }
+          .signer-${idx} img {
+            height: ${signer.position.size}px;
+            width: auto;
+          }
+        `;
+      }).join("\n") || "";
+
+      const pages = selectedEntries.map((entry) => {
+        // Merge entry-specific config with template config for this entry
+        const nameConfig = getEffectiveConfig(currentTemplate.nameConfig, entry.nameConfig);
+        const subtitleConfig = getEffectiveConfig(currentTemplate.subtitleConfig, entry.subtitleConfig);
+        const subsubtitleConfig = getEffectiveConfig(currentTemplate.subsubtitleConfig, entry.subsubtitleConfig);
+
+        const signerHtml = currentTemplate.signers?.map((signer, idx) => {
+          if (!signer.image) return "";
+          return `
+            <div class="signer-${idx}">
+              <img src="${signer.image}" />
+              ${signer.name ? `<p style="font-size: 10px; font-weight: 500; margin: 4px 0 0;">${signer.name}</p>` : ""}
+              ${signer.role ? `<p style="font-size: 8px; color: #666; margin: 0;">${signer.role}</p>` : ""}
+            </div>
+          `;
+        }).join("") || "";
+
+        return `
+          <div class="page">
+            ${currentTemplate.background ? `<img class="bg" src="${currentTemplate.background}">` : ""}
+            <div style="${getInlineTextStyle(nameConfig)}">
+              ${nameConfig.prefix ? `<span style="color: ${nameConfig.prefixColor || nameConfig.color}">${nameConfig.prefix}</span>` : ""}${entry.name}
+            </div>
+            ${currentTemplate.subtitleEnabled ? `
+              <div style="${getInlineTextStyle(subtitleConfig)}">
+                ${subtitleConfig.prefix ? `<span style="color: ${subtitleConfig.prefixColor || subtitleConfig.color}">${subtitleConfig.prefix}</span>` : ""}${entry.subtitle}
+              </div>` : ""}
+            ${currentTemplate.subtitleEnabled && currentTemplate.subsubtitleEnabled ? `
+              <div style="${getInlineTextStyle(subsubtitleConfig)}">
+                ${subsubtitleConfig.prefix ? `<span style="color: ${subsubtitleConfig.prefixColor || subsubtitleConfig.color}">${subsubtitleConfig.prefix}</span>` : ""}${entry.subsubtitle}
+              </div>` : ""}
+            ${signerHtml}
+          </div>
+        `;
+      }).join("");
+
+      const fontFaceRules = generateFontFaceRules();
+
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+${fontFaceRules}
+@page { size: ${isLandscape ? "A4 landscape" : "A4"}; margin: 0; }
+body { 
+  margin: 0; 
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  overflow: hidden;
+}
+.page {
+  width: ${width}mm;
+  height: ${height}mm;
+  position: relative;
+  page-break-after: always;
+  overflow: hidden;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.bg { position: absolute; width: 100%; height: 100%; object-fit: contain; }
+${signerStyle}
+</style>
+</head>
+<body>
+${pages}
+</body>
+</html>`;
+
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+
+        const images = printWindow.document.querySelectorAll("img");
+        const imagePromises = Array.from(images).map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          });
+        });
+
+        await Promise.all(imagePromises);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        toast.dismiss();
+        printWindow.focus();
+        printWindow.print();
+        toast.success("Use 'Save as PDF' in the print dialog");
+      } else {
+        toast.dismiss();
+        toast.error("Please allow popups for PDF export");
+      }
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Export failed");
+      console.error(error);
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -262,7 +426,13 @@ export function CertificateEditor({ onBack }: CertificateEditorProps) {
           </div>
 
           {/* Center buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative">
+            {!currentTemplate && (
+              <div className="absolute right-full mr-3 flex items-center gap-2 animate-pulse whitespace-nowrap">
+                <span className="text-sm text-primary font-medium">Start by creating a template</span>
+                <ArrowRight className="h-4 w-4 text-primary" />
+              </div>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -290,7 +460,7 @@ export function CertificateEditor({ onBack }: CertificateEditorProps) {
             </Button>
             <Button
               size="sm"
-              onClick={() => setExportOpen(true)}
+              onClick={handleExport}
               disabled={!currentTemplate || !hasData}
             >
               <FileDown className="h-4 w-4 mr-2" />
@@ -532,14 +702,7 @@ export function CertificateEditor({ onBack }: CertificateEditorProps) {
           onSubsubtitleEnabledChange={(enabled) => handleTemplateChange({ subsubtitleEnabled: enabled })}
         />
 
-        {/* Export Dialog */}
-        <ExportDialog
-          open={exportOpen}
-          onOpenChange={setExportOpen}
-          template={currentTemplate}
-          entries={selectedEntries}
-          customFonts={customFonts}
-        />
+
 
         {/* Save Dialog */}
         <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
